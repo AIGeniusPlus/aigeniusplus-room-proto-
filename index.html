@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>AIGENIUSPLUS – Room Proto</title>
+<style>
+  html,body { margin:0; height:100%; background:#111; }
+  #ui { position:fixed; top:10px; left:10px; right:10px; display:flex; gap:8px; flex-wrap:wrap; z-index:2; font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+  button, select { padding:8px 10px; border-radius:8px; border:0; }
+  #log { position:fixed; bottom:10px; left:10px; right:10px; color:#ddd; font:12px/1.4 system-ui; opacity:.8; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <button id="toggleObject">Object: Box</button>
+  <button id="rotateCW">Rotate +15°</button>
+  <button id="rotateCCW">Rotate −15°</button>
+  <select id="wallSelect">
+    <option value="back">Back wall</option>
+    <option value="front">Front wall</option>
+    <option value="left">Left wall</option>
+    <option value="right">Right wall</option>
+    <option value="ceiling">Ceiling</option>
+    <option value="floor">Floor</option>
+  </select>
+  <button data-color="#ff3b30" class="paint">Paint Red</button>
+  <button data-color="#34c759" class="paint">Paint Green</button>
+  <button data-color="#0a84ff" class="paint">Paint Blue</button>
+  <button data-color="#ffffff" class="paint">Paint White</button>
+  <button id="voice">🎙️ Voice: Off</button>
+</div>
+<canvas id="c"></canvas>
+<div id="log"></div>
+
+<script type="module">
+  import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+  import { OrbitControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+
+  const canvas = document.getElementById('c');
+  const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x111111);
+
+  const camera = new THREE.PerspectiveCamera(55, 2, 0.1, 200);
+  camera.position.set(3.2, 2.1, 3.6);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+
+  // Lights
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x222233, 0.8);
+  const dir  = new THREE.DirectionalLight(0xffffff, 0.9);
+  dir.position.set(3,4,2);
+  scene.add(hemi, dir);
+
+  // Room (6 planes)
+  const room = new THREE.Group();
+  const wallMats = {
+    back:   new THREE.MeshStandardMaterial({color:0x666666, side:THREE.BackSide}),
+    front:  new THREE.MeshStandardMaterial({color:0x666666, side:THREE.BackSide}),
+    left:   new THREE.MeshStandardMaterial({color:0x666666, side:THREE.BackSide}),
+    right:  new THREE.MeshStandardMaterial({color:0x666666, side:THREE.BackSide}),
+    ceiling:new THREE.MeshStandardMaterial({color:0x7a7a7a, side:THREE.BackSide}),
+    floor:  new THREE.MeshStandardMaterial({color:0x555555, roughness:0.9, metalness:0.0, side:THREE.BackSide}),
+  };
+  const size = 6;
+  function makeWall(mat, rotY=0, pos=[0,0,0]) {
+    const g = new THREE.PlaneGeometry(size, size);
+    const m = mat;
+    const mesh = new THREE.Mesh(g, m);
+    mesh.rotation.y = rotY;
+    mesh.position.set(...pos);
+    return mesh;
+  }
+  // back / front / left / right / ceiling / floor
+  room.add(makeWall(wallMats.back,  Math.PI,      [0,0,-size/2]));
+  room.add(makeWall(wallMats.front, 0,            [0,0, size/2]));
+  const left = makeWall(wallMats.left,  Math.PI/2, [-size/2,0,0]); room.add(left);
+  const right= makeWall(wallMats.right, -Math.PI/2,[ size/2,0,0]); room.add(right);
+  const ceil = makeWall(wallMats.ceiling,0,[0, size/2,0]); ceil.rotation.x = Math.PI/2; room.add(ceil);
+  const floor= makeWall(wallMats.floor,  0,[0,-size/2,0]); floor.rotation.x = -Math.PI/2; room.add(floor);
+  scene.add(room);
+
+  // Center object (box or cylinder)
+  let isBox = true;
+  let centerMesh = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({color:0xdddddd, metalness:0.1, roughness:0.6}));
+  scene.add(centerMesh);
+
+  // UI handlers
+  const toggleBtn = document.getElementById('toggleObject');
+  toggleBtn.onclick = () => {
+    scene.remove(centerMesh);
+    if (isBox) {
+      centerMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,1.2, 32), new THREE.MeshStandardMaterial({color:0xdddddd}));
+      toggleBtn.textContent = "Object: Cylinder";
+    } else {
+      centerMesh = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({color:0xdddddd}));
+      toggleBtn.textContent = "Object: Box";
+    }
+    isBox = !isBox;
+    scene.add(centerMesh);
+  };
+
+  document.getElementById('rotateCW').onclick  = () => centerMesh.rotation.y += THREE.MathUtils.degToRad(15);
+  document.getElementById('rotateCCW').onclick = () => centerMesh.rotation.y -= THREE.MathUtils.degToRad(15);
+
+  const wallSelect = document.getElementById('wallSelect');
+  const paintBtns = document.querySelectorAll('.paint');
+  paintBtns.forEach(b=>{
+    b.onclick = () => {
+      const key = wallSelect.value;
+      wallMats[key].color.set(b.dataset.color);
+      log(`Painted ${key} ${b.textContent.replace('Paint ','')}`);
+    };
+  });
+
+  // Voice Commands (Web Speech API)
+  let recognizing = false;
+  let recog;
+  const voiceBtn = document.getElementById('voice');
+  const logEl = document.getElementById('log');
+  function log(msg){ logEl.textContent = msg; }
+
+  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recog = new SR();
+    recog.lang = 'en-US';
+    recog.interimResults = false;
+    recog.continuous = true;
+
+    recog.onresult = (e)=>{
+      const phrase = e.results[e.results.length-1][0].transcript.trim().toLowerCase();
+      log(`Heard: “${phrase}”`);
+      handleCommand(phrase);
+    };
+    recog.onend = ()=> { if(recognizing){ recog.start(); } };
+    voiceBtn.onclick = ()=>{
+      recognizing = !recognizing;
+      voiceBtn.textContent = recognizing ? '🎙️ Voice: On' : '🎙️ Voice: Off';
+      if (recognizing) recog.start(); else recog.stop();
+    };
+  } else {
+    voiceBtn.disabled = true;
+    voiceBtn.textContent = '🎙️ Voice: Unavailable';
+  }
+
+  function handleCommand(txt){
+    const degMatch = txt.match(/(\d+)\s*degree/);
+    const deg = degMatch ? parseInt(degMatch[1],10) : 15;
+
+    if (txt.includes('rotate') && (txt.includes('clockwise') || txt.includes('right'))) {
+      centerMesh.rotation.y += THREE.MathUtils.degToRad(deg); return;
+    }
+    if (txt.includes('rotate') && (txt.includes('counter') || txt.includes('anticlockwise') || txt.includes('left'))) {
+      centerMesh.rotation.y -= THREE.MathUtils.degToRad(deg); return;
+    }
+    if (txt.includes('make object box') || txt.includes('object box')) { if (!isBox) toggleBtn.click(); return; }
+    if (txt.includes('make object cylinder') || txt.includes('object cylinder')) { if (isBox) toggleBtn.click(); return; }
+
+    // paint commands: “paint back wall red”, “paint floor green”
+    const wallKeys = ['back','front','left','right','ceiling','floor'];
+    for (const key of wallKeys) {
+      if (txt.includes(key) || txt.includes(key+' wall')) {
+        const colorMap = { red:'#ff3b30', green:'#34c759', blue:'#0a84ff', white:'#ffffff', black:'#000000', gray:'#777777' };
+        for (const cname in colorMap) {
+          if (txt.includes(cname)) { wallMats[key].color.set(colorMap[cname]); return; }
+        }
+      }
+    }
+  }
+
+  // Render loop
+  function resizeRendererToDisplaySize() {
+    const {clientWidth,clientHeight} = renderer.domElement;
+    const need = renderer.domElement.width  !== clientWidth*devicePixelRatio ||
+                 renderer.domElement.height !== clientHeight*devicePixelRatio;
+    if (need) {
+      renderer.setSize(clientWidth, clientHeight, false);
+      camera.aspect = clientWidth/clientHeight;
+      camera.updateProjectionMatrix();
+    }
+    return need;
+  }
+  function render() {
+    resizeRendererToDisplaySize();
+    controls.update();
+    renderer.render(scene, camera);
+    requestAnimationFrame(render);
+  }
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  render();
+  window.addEventListener('resize', ()=>renderer.setSize(window.innerWidth, window.innerHeight, false));
+</script>
+</body>
+</html>
