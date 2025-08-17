@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Practice Room – Box in a Box</title>
+<style>
+  body { margin:0; background:#111; display:flex; justify-content:center; align-items:center; height:100vh; }
+  .room {
+    position:relative; width:90%; max-width:600px; aspect-ratio:1/1;
+    background:#f2f2f2; border:6px solid #000; border-radius:12px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .box {
+    width:60%; aspect-ratio:1/1; background:#caa84f;
+    display:flex; align-items:center; justify-content:center;
+    cursor:grab; border:4px solid #333; border-radius:8px;
+  }
+  .inner {
+    width:50%; aspect-ratio:1/1; background:#fff;
+    border:2px dashed #000; border-radius:4px;
+  }
+  .controls {
+    position:fixed; bottom:10px; left:50%; transform:translateX(-50%);
+    display:flex; gap:10px; flex-wrap:wrap; justify-content:center;
+  }
+  button {
+    font-size:16px; padding:8px 14px; border:none; border-radius:8px;
+    background:#eee; cursor:pointer;
+  }
+</style>
+</head>
+<body>
+  <div class="room" id="room">
+    <div class="box" id="box">
+      <div class="inner"></div>
+    </div>
+  </div>
+  <div class="controls">
+    <button onclick="changeColor('#caa84f')">Gold</button>
+    <button onclick="changeColor('#8c2a2a')">Red</button>
+    <button onclick="changeColor('#244b2a')">Green</button>
+    <button onclick="resetBox()">Reset</button>
+  </div>
+<script>
+  const box = document.getElementById('box');
+  let offsetX, offsetY, dragging=false;
+
+  box.addEventListener('mousedown', e => {dragging=true; offsetX=e.offsetX; offsetY=e.offsetY;});
+  window.addEventListener('mousemove', e => {
+    if(!dragging) return;
+    const room = document.getElementById('room').getBoundingClientRect();
+    let x = e.clientX - room.left - offsetX;
+    let y = e.clientY - room.top - offsetY;
+    box.style.position='absolute';
+    box.style.left=x+'px'; box.style.top=y+'px';
+  });
+  window.addEventListener('mouseup', ()=>dragging=false);
+
+  box.addEventListener('touchstart', e => {
+    dragging=true;
+    const rect = box.getBoundingClientRect();
+    offsetX = e.touches[0].clientX - rect.left;
+    offsetY = e.touches[0].clientY - rect.top;
+  });
+  window.addEventListener('touchmove', e => {
+    if(!dragging) return;
+    const room = document.getElementById('room').getBoundingClientRect();
+    let x = e.touches[0].clientX - room.left - offsetX;
+    let y = e.touches[0].clientY - room.top - offsetY;
+    box.style.position='absolute';
+    box.style.left=x+'px'; box.style.top=y+'px';
+  }, {passive:false});
+  window.addEventListener('touchend', ()=>dragging=false);
+
+  function changeColor(c){ box.style.background=c; }
+  function resetBox(){ box.style.position='relative'; box.style.left=''; box.style.top=''; box.style.background='#caa84f'; }
+</script>
+</body>
+</html>

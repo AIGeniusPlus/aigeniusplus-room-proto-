@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Practice Room – Box in a Box (Enhanced)</title>
+<style>
+  :root { --bg:#111; --room:#f2f2f2; --box:#caa84f; --border:#000; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; background:var(--bg); display:flex; justify-content:center; align-items:center; height:100vh; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  .room {
+    position:relative; width:90%; max-width:600px; aspect-ratio:1/1;
+    background:var(--room); border:6px solid #000; border-radius:12px;
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+    transition: background 0.2s ease;
+  }
+  .room.grid {
+    background-image:
+      linear-gradient(#ddd 1px, transparent 1px),
+      linear-gradient(90deg, #ddd 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-color: var(--room);
+  }
+  .box {
+    width:60%; aspect-ratio:1/1; background:var(--box);
+    display:flex; align-items:center; justify-content:center;
+    cursor:grab; border:4px solid #333; border-radius:8px;
+    position:relative;
+    transition: transform 0.08s ease, left 0.08s ease, top 0.08s ease, background 0.15s ease;
+    touch-action:none;
+  }
+  .box.dragging { cursor:grabbing; transform: scale(1.05); }
+  .inner {
+    width:50%; aspect-ratio:1/1; background:#fff;
+    border:2px dashed #000; border-radius:4px;
+  }
+  .controls {
+    position:fixed; bottom:10px; left:50%; transform:translateX(-50%);
+    display:flex; gap:10px; flex-wrap:wrap; justify-content:center;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.85);
+    border-radius: 12px;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+    width: min(95%, 720px);
+  }
+  button {
+    font-size:16px; padding:8px 14px; border:none; border-radius:8px;
+    background:#eee; cursor:pointer;
+  }
+  .pill { border-radius:999px; }
+  .muted { opacity:0.9; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; width:100%; }
+  .spacer { flex: 1 1 8px; }
+  .tag {
+    position: fixed; top: 10px; right: 10px;
+    background: rgba(255,255,255,0.85); padding: 6px 10px; border-radius: 999px;
+    font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+</style>
+</head>
+<body>
+  <div class="tag" id="stamp"></div>
+  <div class="room" id="room">
+    <div class="box" id="box">
+      <div class="inner"></div>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="row">
+      <button onclick="changeColor('#caa84f')" class="pill">Gold</button>
+      <button onclick="changeColor('#8c2a2a')" class="pill">Red</button>
+      <button onclick="changeColor('#244b2a')" class="pill">Green</button>
+      <button onclick="changeColor('#2a4a8c')" class="pill">Blue</button>
+      <button onclick="changeColor('#5e2a8c')" class="pill">Purple</button>
+      <span class="spacer"></span>
+      <button onclick="centerBox()" class="pill">Center</button>
+      <button onclick="resetBox()" class="pill">Reset</button>
+      <button onclick="toggleGrid()" class="pill muted">Toggle Grid</button>
+    </div>
+  </div>
+<script>
+  const roomEl = document.getElementById('room');
+  const boxEl  = document.getElementById('box');
+  const stamp  = document.getElementById('stamp');
+  let dragging = false, offsetX = 0, offsetY = 0;
+
+  function pad(n){ return String(n).padStart(2,'0'); }
+  const d = new Date();
+  stamp.textContent = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) +
+                      ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+
+  function getBounds() {
+    const room = roomEl.getBoundingClientRect();
+    const box  = boxEl.getBoundingClientRect();
+    return { room, box };
+  }
+  function clamp(val, min, max){ return Math.max(min, Math.min(max, val)); }
+
+  function setBoxPos(x, y) {
+    const { room, box } = getBounds();
+    const maxX = room.width - box.width;
+    const maxY = room.height - box.height;
+    const clampedX = clamp(x, 0, maxX);
+    const clampedY = clamp(y, 0, maxY);
+    boxEl.style.left = clampedX + 'px';
+    boxEl.style.top  = clampedY + 'px';
+  }
+
+  function getRelativePos(clientX, clientY) {
+    const room = roomEl.getBoundingClientRect();
+    return { x: clientX - room.left - offsetX, y: clientY - room.top - offsetY };
+  }
+
+  boxEl.addEventListener('mousedown', e => {
+    dragging = true;
+    const rect = boxEl.getBoundingClientRect();
+    offsetX = e.clientX - rect.left;
+    offsetY = e.clientY - rect.top;
+    boxEl.classList.add('dragging');
+    if (getComputedStyle(boxEl).position !== 'absolute') {
+      const room = roomEl.getBoundingClientRect();
+      boxEl.style.position = 'absolute';
+      setBoxPos(rect.left - room.left, rect.top - room.top);
+    }
+  });
+  window.addEventListener('mousemove', e => {
+    if(!dragging) return;
+    const {x, y} = getRelativePos(e.clientX, e.clientY);
+    setBoxPos(x, y);
+  });
+  window.addEventListener('mouseup', () => {
+    dragging = false;
+    boxEl.classList.remove('dragging');
+  });
+
+  boxEl.addEventListener('touchstart', e => {
+    dragging = true;
+    const rect = boxEl.getBoundingClientRect();
+    offsetX = e.touches[0].clientX - rect.left;
+    offsetY = e.touches[0].clientY - rect.top;
+    boxEl.classList.add('dragging');
+    if (getComputedStyle(boxEl).position !== 'absolute') {
+      const room = roomEl.getBoundingClientRect();
+      boxEl.style.position = 'absolute';
+      setBoxPos(rect.left - room.left, rect.top - room.top);
+    }
+  }, {passive:true});
+  window.addEventListener('touchmove', e => {
+    if(!dragging) return;
+    const t = e.touches[0];
+    const {x, y} = getRelativePos(t.clientX, t.clientY);
+    setBoxPos(x, y);
+  }, {passive:false});
+  window.addEventListener('touchend', () => {
+    dragging = false;
+    boxEl.classList.remove('dragging');
+  });
+
+  let tapTimer = null;
+  function onTap() {
+    if (tapTimer) {
+      clearTimeout(tapTimer);
+      tapTimer = null;
+      centerBox();
+    } else {
+      tapTimer = setTimeout(() => { tapTimer = null; }, 250);
+    }
+  }
+  boxEl.addEventListener('dblclick', centerBox);
+  boxEl.addEventListener('click', onTap);
+  boxEl.addEventListener('touchend', onTap);
+
+  function changeColor(c){ boxEl.style.background = c; }
+  function centerBox(){
+    const { room, box } = getBounds();
+    const x = (room.width - box.width) / 2;
+    const y = (room.height - box.height) / 2;
+    boxEl.style.position = 'absolute';
+    setBoxPos(x, y);
+  }
+  function resetBox(){
+    boxEl.style.position='relative';
+    boxEl.style.left=''; boxEl.style.top='';
+    boxEl.style.background='#caa84f';
+  }
+  function toggleGrid(){ roomEl.classList.toggle('grid'); }
+
+  window.addEventListener('load', () => {
+    requestAnimationFrame(centerBox);
+  });
+</script>
+</body>
+</html>
