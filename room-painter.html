@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Room Painter</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #111;
+      color: white;
+      overflow: hidden;
+    }
+    #ui {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.6);
+      padding: 10px;
+      border-radius: 8px;
+    }
+    button, select {
+      margin: 4px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: none;
+      font-size: 14px;
+    }
+    #back {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      border-radius: 8px;
+      background: #444;
+      color: white;
+    }
+    canvas { 
+      display:block; 
+      width:100%; 
+      height:100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <button id="toggleObject">Object: Box</button>
+    <button id="rotateCW">Rotate +15°</button>
+    <button id="rotateCCW">Rotate −15°</button>
+    <br>
+    <select id="wallSelect">
+      <option value="back">Back wall</option>
+      <option value="front">Front wall</option>
+      <option value="left">Left wall</option>
+      <option value="right">Right wall</option>
+      <option value="ceiling">Ceiling</option>
+      <option value="floor">Floor</option>
+    </select>
+    <br>
+    <button data-color="#ff3b30" class="paint">Paint Red</button>
+    <button data-color="#34c759" class="paint">Paint Green</button>
+    <button data-color="#0a84ff" class="paint">Paint Blue</button>
+    <button data-color="#ffffff" class="paint">Paint White</button>
+    <br>
+    <button id="voice">🎙️ Voice: Off</button>
+  </div>
+
+  <a href="index.html"><button id="back">⬅ Back to Home</button></a>
+
+  <canvas id="c"></canvas>
+  <div id="log"></div>
+
+  <script>
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let rotation = 0;
+    let wallColors = {
+      back: "#222",
+      front: "#333",
+      left: "#444",
+      right: "#555",
+      ceiling: "#666",
+      floor: "#777"
+    };
+
+    function drawRoom() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = wallColors.back;
+      ctx.fillRect(100,100,canvas.width-200,canvas.height-200);
+      // Simple placeholder drawing, extend with 3D if needed
+    }
+    drawRoom();
+
+    document.querySelectorAll(".paint").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const wall = document.getElementById("wallSelect").value;
+        wallColors[wall] = btn.dataset.color;
+        drawRoom();
+      });
+    });
+
+    document.getElementById("rotateCW").onclick = ()=>{ rotation+=15; drawRoom(); };
+    document.getElementById("rotateCCW").onclick = ()=>{ rotation-=15; drawRoom(); };
+
+    document.getElementById("toggleObject").onclick = ()=>{
+      alert("Object toggle (demo only)");
+    };
+  </script>
+</body>
+</html>
