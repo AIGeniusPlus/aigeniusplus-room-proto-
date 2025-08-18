@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Room Painter (2D)</title>
+<style>
+  :root { --fg:#fff; --bg:#111; --panel:rgba(0,0,0,.65) }
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;overflow:hidden}
+  #ui{
+    position:fixed;left:50%;top:10px;transform:translateX(-50%);
+    background:var(--panel);padding:10px 12px;border-radius:10px;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;z-index:10
+  }
+  button,select,input[type=range]{
+    padding:8px 12px;border:none;border-radius:8px;font-size:14px
+  }
+  .chip{padding:6px 10px;border-radius:999px;background:var(--panel);font-size:12px}
+  canvas{display:block;width:100vw;height:100vh}
+  #back{
+    position:fixed;left:10px;bottom:10px;z-index:10;
+    padding:10px 14px;border-radius:8px;border:none
+  }
+</style>
+</head>
+<body>
+  <div id="ui">
+    <span class="chip" id="which">Selected: back</span>
+    <select id="wall">
+      <option value="back">Back</option>
+      <option value="left">Left</option>
+      <option value="right">Right</option>
+      <option value="ceiling">Ceiling</option>
+      <option value="floor">Floor</option>
+    </select>
+
+    <button class="paint" data-color="#ff3b30">Red</button>
+    <button class="paint" data-color="#34c759">Green</button>
+    <button class="paint" data-color="#0a84ff">Blue</button>
+    <button class="paint" data-color="#ffd60a">Yellow</button>
+    <button class="paint" data-color="#bf5af2">Purple</button>
+    <button class="paint" data-color="#ffffff">White</button>
+    <button class="paint" data-color="#8e8e93">Gray</button>
+
+    <label class="chip">Depth
+      <input id="depth" type="range" min="0.15" max="0.60" step="0.01" value="0.35">
+    </label>
+  </div>
+
+  <a href="index.html"><button id="back">⬅ Back to Home</button></a>
+  <canvas id="c"></canvas>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W=0,H=0;
+function fit(){ W=canvas.width=innerWidth; H=canvas.height=innerHeight; draw(); }
+addEventListener('resize', fit); fit();
+
+// room state
+const colors = {
+  back:   '#2b2b2e',
+  left:   '#3a3a3e',
+  right:  '#3a3a3e',
+  ceiling:'#2d2d30',
+  floor:  '#202022'
+};
+let depth = 0.35; // 0..1
+let selected = 'back';
+
+// UI wires
+const wallSel = document.getElementById('wall');
+const which   = document.getElementById('which');
+wallSel.onchange = e => { selected = e.target.value; which.textContent = 'Selected: '+selected; draw(); };
+document.querySelectorAll('.paint').forEach(b=>{
+  b.onclick = ()=>{ colors[selected] = b.dataset.color; draw(); };
+});
+document.getElementById('depth').oninput = e => { depth = +e.target.value; draw(); };
+
+// Hit-test so you can tap walls directly
+canvas.addEventListener('pointerdown', e=>{
+  const p = {x:e.clientX, y:e.clientY};
+  const polys = computePolys();
+  const order = ['floor','ceiling','left','right','back']; // test big first
+  for(const k of order){
+    if(pointInPoly(p, polys[k])){ selected = k; wallSel.value=k; which.textContent='Selected: '+k; draw(); break; }
+  }
+});
+
+function computePolys(){
+  // outer rectangle (near you)
+  const margin = Math.min(W,H)*0.12;
+  const ox1 = margin, oy1 = margin*1.4;
+  const ox2 = W-margin, oy2 = H-margin*1.1;
+
+  // inner rectangle (far wall) “pulled in” by depth
+  const ix1 = lerp(ox1, ox2, depth);
+  const iy1 = lerp(oy1, oy2, depth);
+  const ix2 = lerp(ox2, ox1, depth);
+  const iy2 = lerp(oy2, oy1, depth);
+
+  const back    = [ {x:ix1,y:iy1},{x:ix2,y:iy1},{x:ix2,y:iy2},{x:ix1,y:iy2} ];
+  const ceiling = [ {x:ox1,y:oy1},{x:ox2,y:oy1},{x:ix2,y:iy1},{x:ix1,y:iy1} ];
+  const floor   = [ {x:ox1,y:oy2},{x:ix1,y:iy2},{x:ix2,y:iy2},{x:ox2,y:oy2} ];
+  const left    = [ {x:ox1,y:oy1},{x:ix1,y:iy1},{x:ix1,y:iy2},{x:ox1,y:oy2} ];
+  const right   = [ {x:ix2,y:iy1},{x:ox2,y:oy1},{x:ox2,y:oy2},{x:ix2,y:iy2} ];
+
+  return {back,ceiling,floor,left,right};
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  const p = computePolys();
+
+  // draw in painter’s order so edges look right
+  drawPoly(p.ceiling, colors.ceiling);
+  drawPoly(p.left,    colors.left);
+  drawPoly(p.right,   colors.right);
+  drawPoly(p.floor,   colors.floor);
+  drawPoly(p.back,    colors.back);
+
+  // subtle grid on back wall to show changes
+  grid(p.back, 14, 'rgba(255,255,255,0.05)');
+}
+
+function drawPoly(poly, fill){
+  ctx.beginPath();
+  ctx.moveTo(poly[0].x, poly[0].y);
+  for(let i=1;i<poly.length;i++) ctx.lineTo(poly[i].x,poly[i].y);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.35)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+function grid(poly, step, color){
+  // draw within bounding box (simple effect)
+  const xs = poly.map(p=>p.x), ys = poly.map(p=>p.y);
+  const x1=Math.min(...xs), x2=Math.max(...xs), y1=Math.min(...ys), y2=Math.max(...ys);
+  ctx.save();
+  ctx.beginPath(); // clip to back wall
+  ctx.moveTo(poly[0].x, poly[0].y);
+  for(let i=1;i<poly.length;i++) ctx.lineTo(poly[i].x,poly[i].y);
+  ctx.closePath();
+  ctx.clip();
+  ctx.strokeStyle=color; ctx.lineWidth=1;
+  for(let x=x1; x<=x2; x+=step){ ctx.beginPath(); ctx.moveTo(x,y1); ctx.lineTo(x,y2); ctx.stroke(); }
+  for(let y=y1; y<=y2; y+=step){ ctx.beginPath(); ctx.moveTo(x1,y); ctx.lineTo(x2,y); ctx.stroke(); }
+  ctx.restore();
+}
+
+function lerp(a,b,t){ return a+(b-a)*t; }
+
+function pointInPoly(pt, poly){
+  // even–odd rule
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const xi=poly[i].x, yi=poly[i].y, xj=poly[j].x, yj=poly[j].y;
+    const intersect = ((yi>pt.y)!==(yj>pt.y)) && (pt.x < (xj-xi)*(pt.y-yi)/(yj-yi)+xi);
+    if(intersect) inside=!inside;
+  }
+  return inside;
+}
+</script>
+</body>
+</html>
